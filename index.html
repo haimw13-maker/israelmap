@@ -3,25 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>אתגר המפה - חיים וסרטיל</title>
+    <title>אתגר המפה</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
     <style>
-        :root { --blue: #1a73e8; --success: #2ecc71; --gold: #f1c40f; }
+        :root { --blue: #1a73e8; --success: #2ecc71; --gold: #f1c40f; --danger: #e74c3c; }
         * { box-sizing: border-box; font-family: 'Segoe UI', system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
         body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #001529; color: white; }
         #map { height: 100vh; width: 100vw; z-index: 1; }
 
         .modal { position: fixed; inset: 0; background: rgba(0, 21, 41, 0.98); z-index: 2000; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 30px; text-align: center; }
-        .btn { background: var(--blue); color: white; border: none; padding: 15px 30px; border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 1.2rem; width: 100%; max-width: 280px; transition: 0.2s; }
+        .btn { background: var(--blue); color: white; border: none; padding: 15px 30px; border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 1.2rem; width: 100%; max-width: 280px; transition: 0.2s; margin: 5px; }
         .btn:active { transform: scale(0.95); }
+        .btn-whatsapp { background: #25D366; font-size: 1rem; }
         input { padding: 15px; border-radius: 12px; border: none; margin-bottom: 15px; width: 100%; max-width: 280px; text-align: center; font-size: 1.1rem; color: #000; outline: none; }
 
         #top-card { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 400px; background: white; padding: 15px; border-radius: 20px; z-index: 1000; color: #202124; text-align: center; border-bottom: 5px solid var(--blue); box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
         .city-name { font-size: 2.1rem; font-weight: 900; margin: 2px 0; }
         
+        #timer-bar-container { width: 100%; height: 6px; background: #eee; border-radius: 3px; margin-top: 10px; overflow: hidden; }
+        #timer-bar { height: 100%; width: 100%; background: var(--blue); transition: width 1s linear; }
+
         #feedback-card { position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); width: 85%; max-width: 350px; background: white; padding: 20px; border-radius: 20px; z-index: 1000; display: none; color: #202124; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        #encouragement { font-weight: 800; color: var(--blue); margin-bottom: 5px; font-size: 1.1rem; }
 
         .leaderboard { width: 100%; max-width: 320px; margin: 15px 0; background: rgba(255,255,255,0.05); border-radius: 15px; padding: 10px; border: 1px solid rgba(255,255,255,0.1); }
         .score-row { display: flex; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.95rem; }
@@ -33,7 +38,7 @@
 
 <div id="start-screen" class="modal">
     <h1 style="font-size: 2.5rem; margin-bottom: 10px;">🇮🇱 אתגר המפה</h1>
-    <p style="margin-bottom: 20px; opacity: 0.9;">מי הכי מכיר את הארץ? הכנס שם:</p>
+    <p style="margin-bottom: 20px; opacity: 0.9;">מי הכי מהיר ומדויק? הכנס שם:</p>
     <input type="text" id="player-name-input" placeholder="השם שלך..." maxlength="15">
     <button class="btn" onclick="checkAndStart()">התחל לשחק</button>
     <h3 style="margin-top:30px; color: var(--gold);">🏆 שיאי המערכת (Top 10):</h3>
@@ -44,12 +49,14 @@
     <div id="q-label" style="font-size:0.8rem; font-weight:800; opacity: 0.7;">שאלה 1 / 12</div>
     <div class="city-name" id="target-city">טוען...</div>
     <div id="score-label" style="color:var(--blue); font-weight:900;">0 נק'</div>
+    <div id="timer-bar-container"><div id="timer-bar"></div></div>
 </div>
 
 <div id="map"></div>
 <div class="credit">כל הזכויות שמורות לחיים וסרטיל</div>
 
 <div id="feedback-card">
+    <div id="encouragement"></div>
     <div id="points-delta" style="font-size: 2.5rem; font-weight: 900; color: var(--success);"></div>
     <div id="dist-text" style="color: #555; font-size: 1rem; margin-bottom: 15px;"></div>
     <button class="btn" onclick="nextQuestion()">המשך ליעד הבא</button>
@@ -58,6 +65,7 @@
 <div id="end-screen" class="modal" style="display:none;">
     <h1 style="font-size: 2.5rem;">סיימתם! 🎉</h1>
     <div id="final-score" style="font-size: 5rem; color: var(--gold); font-weight: 900; margin: 10px 0;">0</div>
+    <button class="btn btn-whatsapp" onclick="shareToWhatsApp()">שתף תוצאה בווטצאפ 💬</button>
     <h3 style="margin-top:10px;">🏆 לוח התהילה העולמי (Top 10)</h3>
     <div id="global-leaderboard" class="leaderboard"></div>
     <button class="btn" onclick="location.reload()">שחק שוב</button>
@@ -85,42 +93,48 @@
             {n:"באר שבע", lat:31.253, lng:34.791}, {n:"אילת", lat:29.557, lng:34.951}, {n:"נתניה", lat:32.321, lng:34.853},
             {n:"אשדוד", lat:31.804, lng:34.655}, {n:"פתח תקווה", lat:32.087, lng:34.887}, {n:"ראשון לציון", lat:31.973, lng:34.792},
             {n:"חולון", lat:32.015, lng:34.773}, {n:"בני ברק", lat:32.083, lng:34.833}, {n:"רמת גן", lat:32.079, lng:34.814},
-            {n:"רחובות", lat:31.892, lng:34.811}, {n:"אשקלון", lat:31.668, lng:34.574}, {n:"טבריה", lat:32.789, lng:35.535},
-            {n:"מודיעין", lat:31.899, lng:35.007}, {n:"נהריה", lat:33.005, lng:35.093}, {n:"בית שמש", lat:31.747, lng:34.988},
-            {n:"חדרה", lat:32.434, lng:34.919}, {n:"עכו", lat:32.927, lng:35.082}
+            {n:"הוד השרון", lat:32.155, lng:34.894}, {n:"גבעתיים", lat:32.072, lng:34.810}, {n:"רמת השרון", lat:32.139, lng:34.839},
+            {n:"קריית אונו", lat:32.055, lng:34.863}, {n:"נס ציונה", lat:31.928, lng:34.802}, {n:"קריית אתא", lat:32.802, lng:35.105}
         ],
         tier2: [
             {n:"קצרין", lat:32.992, lng:35.692}, {n:"מצפה רמון", lat:30.608, lng:34.803}, {n:"צפת", lat:32.964, lng:35.495},
             {n:"אריאל", lat:32.106, lng:35.183}, {n:"שדרות", lat:31.524, lng:34.595}, {n:"נתיבות", lat:31.417, lng:34.588},
             {n:"אופקים", lat:31.312, lng:34.620}, {n:"קרית שמונה", lat:33.207, lng:35.570}, {n:"כרמיאל", lat:32.913, lng:35.296},
-            {n:"ערד", lat:31.261, lng:35.215}, {n:"קרית גת", lat:31.611, lng:34.764}, {n:"דימונה", lat:31.066, lng:35.033},
-            {n:"זכרון יעקב", lat:32.573, lng:34.951}, {n:"ירוחם", lat:30.988, lng:34.931}, {n:"עפולה", lat:32.607, lng:35.289},
-            {n:"נצרת", lat:32.699, lng:35.303}, {n:"מעלות תרשיחא", lat:33.016, lng:35.267}, {n:"מגדל העמק", lat:32.673, lng:35.241}
+            {n:"מעלה אדומים", lat:31.782, lng:35.301}, {n:"טבריה", lat:32.789, lng:35.535}, {n:"עכו", lat:32.927, lng:35.082},
+            {n:"נהריה", lat:33.005, lng:35.093}, {n:"ערד", lat:31.261, lng:35.215}, {n:"דימונה", lat:31.066, lng:35.033},
+            {n:"עפולה", lat:32.607, lng:35.289}, {n:"בית שאן", lat:32.497, lng:35.500}, {n:"מבשרת ציון", lat:31.801, lng:35.155}
         ],
         tier3: [
             {n:"גני טל", lat:31.791, lng:34.808}, {n:"חפץ חיים", lat:31.794, lng:34.807}, {n:"יד בנימין", lat:31.798, lng:34.847},
             {n:"בית חלקיה", lat:31.802, lng:34.826}, {n:"נהלל", lat:32.690, lng:35.193}, {n:"עין גב", lat:32.810, lng:35.641},
             {n:"דגניה א'", lat:32.708, lng:35.575}, {n:"יטבתה", lat:29.894, lng:35.060}, {n:"בארי", lat:31.424, lng:34.492},
-            {n:"חולית", lat:31.229, lng:34.331}, {n:"ניר עוז", lat:31.309, lng:34.402}, {n:"נחל עוז", lat:31.472, lng:34.498},
-            {n:"כפר בלום", lat:33.170, lng:35.607}, {n:"מטולה", lat:33.284, lng:35.580}, {n:"עומר", lat:31.264, lng:34.845},
-            {n:"מיתר", lat:31.332, lng:34.845}, {n:"ספיר", lat:30.612, lng:35.184}, {n:"בית ינאי", lat:32.399, lng:34.862},
-            {n:"כפר ורדים", lat:32.986, lng:35.226}, {n:"עזוז", lat:30.792, lng:34.468}, {n:"עין גדי", lat:31.458, lng:35.390}
+            {n:"אלון שבות", lat:31.656, lng:35.127}, {n:"תקוע", lat:31.637, lng:35.228}, {n:"עפרה", lat:31.954, lng:35.263},
+            {n:"שילה", lat:32.052, lng:35.289}, {n:"איתמר", lat:32.174, lng:35.311}, {n:"יד מרדכי", lat:31.587, lng:34.557},
+            {n:"מרום גולן", lat:33.131, lng:35.779}, {n:"נתיב העשרה", lat:31.611, lng:34.507}, {n:"אפרת", lat:31.658, lng:35.148},
+            {n:"קרית ארבע", lat:31.528, lng:35.118}, {n:"רבבה", lat:32.122, lng:35.093}, {n:"ברוכין", lat:32.103, lng:35.068},
+            {n:"עלי", lat:32.072, lng:35.265}, {n:"אלמוג", lat:31.789, lng:35.460}, {n:"צוקים", lat:30.485, lng:35.123},
+            {n:"עין יהב", lat:30.658, lng:35.237}, {n:"כפר ורדים", lat:32.986, lng:35.226}, {n:"מצפה שלם", lat:31.587, lng:35.394}
         ]
     };
 
     let playerName = "", totalScore = 0, current = 0, map, quizSet = [], markers = [], answered = false;
+    let timeLeft = 10, timerInterval;
+
+    const cheers = [
+        "אלוף! אתה כמו שועל ארצישראלי 🦊",
+        "דיוק של צלף סיירת! 🎯",
+        "פגיעה בול! אתה חי את הארץ 🇮🇱",
+        "וואו! נראה אותך מנווט בלי GPS 🧭",
+        "מדהים! אתה מכיר כל רגב באדמה 🌱",
+        "ישראלי אמיתי! פשוט מקצוען 🏆"
+    ];
 
     function updateLeaderboardUI(elementId) {
         db.ref('scores').orderByChild('score').limitToLast(10).on('value', snap => {
             let list = [];
             snap.forEach(c => { list.push(c.val()); });
             list.reverse();
-            const html = list.map((s, i) => `
-                <div class="score-row">
-                    <span>${i + 1}. ${s.name}</span>
-                    <b>${s.score}</b>
-                </div>
-            `).join('');
+            const html = list.map((s, i) => `<div class="score-row"><span>${i + 1}. ${s.name}</span><b>${s.score}</b></div>`).join('');
             document.getElementById(elementId).innerHTML = html || "אין שיאים עדיין";
         });
     }
@@ -145,27 +159,73 @@
             ...pool.tier3.sort(()=>.5-Math.random()).slice(0,4)
         ];
         updateUI();
+        startTimer();
+    }
+
+    function startTimer() {
+        clearInterval(timerInterval);
+        timeLeft = 10;
+        updateTimerBar();
+        timerInterval = setInterval(() => {
+            timeLeft--;
+            updateTimerBar();
+            if (timeLeft <= 0) {
+                clearInterval(timerInterval);
+                handleTimeUp();
+            }
+        }, 1000);
+    }
+
+    function updateTimerBar() {
+        const bar = document.getElementById('timer-bar');
+        bar.style.width = (timeLeft * 10) + "%";
+        bar.style.background = timeLeft < 4 ? "var(--danger)" : "var(--blue)";
+    }
+
+    function handleTimeUp() {
+        if (answered) return;
+        onMapClick({ latlng: L.latLng(0, 0), isTimeout: true });
     }
 
     function onMapClick(e) {
         if (answered) return;
         answered = true;
+        clearInterval(timerInterval);
+        
         const target = quizSet[current];
         const dest = L.latLng(target.lat, target.lng);
-        const dist = e.latlng.distanceTo(dest) / 1000;
-        
-        let points = Math.max(0, 10 - Math.floor(dist / 6));
-        if (dist < 4) points = 10;
-        totalScore += points;
+        let distScore = 0;
+        let timeScore = 0;
+        let distText = "נגמר הזמן!";
+        let encouragement = "";
 
-        const uMark = L.circleMarker(e.latlng, {color: '#ff4e4e', radius: 7, fillOpacity: 1}).addTo(map);
+        if (!e.isTimeout) {
+            const dist = e.latlng.distanceTo(dest) / 1000;
+            distText = `מרחק מהיעד: ${dist.toFixed(1)} ק"מ`;
+            
+            if (dist < 5) {
+                encouragement = cheers[Math.floor(Math.random() * cheers.length)];
+            }
+
+            distScore = Math.max(0, 10 - Math.floor(dist / 6));
+            if (dist < 4) distScore = 10;
+            timeScore = timeLeft;
+
+            const uMark = L.circleMarker(e.latlng, {color: '#ff4e4e', radius: 7, fillOpacity: 1}).addTo(map);
+            L.polyline([e.latlng, dest], {color: 'white', weight: 2, dashArray: '5, 10'}).addTo(map);
+            markers.push(uMark);
+        }
+
+        let finalPoints = Math.round((distScore * 0.8) + (timeScore * 0.2));
+        totalScore += finalPoints;
+
         const tMark = L.circleMarker(dest, {color: '#2ecc71', radius: 7, fillOpacity: 1}).addTo(map)
                        .bindTooltip(target.n, {permanent: true, direction: 'top'}).openTooltip();
-        L.polyline([e.latlng, dest], {color: 'white', weight: 2, dashArray: '5, 10'}).addTo(map);
-        markers.push(uMark, tMark);
+        markers.push(tMark);
 
-        document.getElementById('points-delta').innerText = `+${points}`;
-        document.getElementById('dist-text').innerText = `מרחק מהיעד: ${dist.toFixed(1)} ק"מ`;
+        document.getElementById('encouragement').innerText = encouragement;
+        document.getElementById('points-delta').innerText = `+${finalPoints}`;
+        document.getElementById('dist-text').innerText = distText;
         document.getElementById('feedback-card').style.display = 'block';
         document.getElementById('score-label').innerText = `${totalScore} נק'`;
     }
@@ -183,7 +243,9 @@
         });
         answered = false;
         document.getElementById('feedback-card').style.display = 'none';
+        document.getElementById('encouragement').innerText = "";
         updateUI();
+        startTimer();
     }
 
     function showEndScreen() {
@@ -191,6 +253,12 @@
         document.getElementById('final-score').innerText = totalScore;
         db.ref('scores').push({ name: playerName, score: totalScore, date: Date.now() });
         updateLeaderboardUI('global-leaderboard');
+    }
+
+    function shareToWhatsApp() {
+        const text = `הצלחתי להוציא ${totalScore} נקודות ב"אתגר המפה"! חושבים שאתם מכירים את הארץ יותר טוב ממני? בואו נראה אתכם: ${window.location.href}`;
+        const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+        window.open(url, '_blank');
     }
 </script>
 </body>
